@@ -113,6 +113,9 @@
     });
   };
 
+  // Can find the shadow root otherwise it'll return the document
+
+
   const reflow = element => {
     // eslint-disable-next-line no-unused-expressions
     element.offsetHeight;
@@ -130,7 +133,7 @@
     return null;
   };
 
-
+  const DOMContentLoadedCallbacks = [];
 
 
 
@@ -235,15 +238,35 @@
         }
       } // To please ESLint
 
+
       return null;
     };
   }
 
+  function findHandler(events, handler, delegationSelector = null) {
+    const uidEventList = Object.keys(events);
+
+    for (let i = 0, len = uidEventList.length; i < len; i++) {
+      const event = events[uidEventList[i]];
+
+      if (event.originalHandler === handler && event.delegationSelector === delegationSelector) {
+        return event;
+      }
+    }
+
+    return null;
+  }
 
   function normalizeParams(originalTypeEvent, handler, delegationFn) {
     const delegation = typeof handler === 'string';
     const originalHandler = delegation ? delegationFn : handler;
     let typeEvent = getTypeEvent(originalTypeEvent);
+    const isNative = nativeEvents.has(typeEvent);
+
+    if (!isNative) {
+      typeEvent = originalTypeEvent;
+    }
+
     return [delegation, originalHandler, typeEvent];
   }
 
@@ -252,7 +275,22 @@
       return;
     }
 
-  
+    if (customEventsRegex.test(originalTypeEvent)) {
+      const wrapFn = fn => {
+        return function (event) {
+          if (!event.relatedTarget || event.relatedTarget !== event.delegateTarget && !event.delegateTarget.contains(event.relatedTarget)) {
+            return fn.call(this, event);
+          }
+        };
+      };
+
+      if (delegationFn) {
+        delegationFn = wrapFn(delegationFn);
+      } else {
+        handler = wrapFn(handler);
+      }
+    }
+
     const [delegation, originalHandler, typeEvent] = normalizeParams(originalTypeEvent, handler, delegationFn);
     const events = getEvent(element);
     const handlers = events[typeEvent] || (events[typeEvent] = {});
@@ -331,6 +369,8 @@
       const isNative = nativeEvents.has(typeEvent);
       let jQueryEvent;
       let bubbles = true;
+      let nativeDispatch = true;
+      let defaultPrevented = false;
       let evt = null;
 
       if (inNamespace && $) {
@@ -569,6 +609,8 @@
   const DATA_KEY$a = 'bs.carousel';
   const EVENT_KEY$a = `.${DATA_KEY$a}`;
   const DATA_API_KEY$6 = '.data-api';
+  const ARROW_LEFT_KEY = 'ArrowLeft';
+  const ARROW_RIGHT_KEY = 'ArrowRight';
   // Time for mouse compat events to fire after touch
 
 
@@ -621,6 +663,8 @@
   const SELECTOR_INDICATOR = '[data-bs-target]';
   const SELECTOR_DATA_SLIDE = '[data-bs-slide], [data-bs-slide-to]';
   const SELECTOR_DATA_RIDE = '[data-bs-ride="carousel"]';
+  const POINTER_TYPE_TOUCH = 'touch';
+  const POINTER_TYPE_PEN = 'pen';
   class Carousel extends BaseComponent {
     constructor(element, config) {
       super(element);
@@ -732,12 +776,17 @@
 
     _slide(directionOrOrder, element) {
       const order = this._directionToOrder(directionOrOrder);
+
       const activeElement = SelectorEngine.findOne(SELECTOR_ACTIVE_ITEM, this._element);
+
       const nextElement = element || this._getItemByOrder(order, activeElement);
+
+
       const isCycling = Boolean(this._interval);
       const isNext = order === ORDER_NEXT;
       const directionalClassName = isNext ? CLASS_NAME_START : CLASS_NAME_END;
       const orderClassName = isNext ? CLASS_NAME_NEXT : CLASS_NAME_PREV;
+
       const eventDirectionName = this._orderToDirection(order);
 
       if (nextElement && nextElement.classList.contains(CLASS_NAME_ACTIVE$2)) {
@@ -787,6 +836,7 @@
         this._isSliding = false;
         triggerSlidEvent();
       }
+     
     }
 
     _directionToOrder(direction) {
