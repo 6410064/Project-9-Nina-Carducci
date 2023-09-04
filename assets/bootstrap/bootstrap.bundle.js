@@ -886,10 +886,7 @@
         }
 
         data[action]();
-      } else if (_config.interval && _config.ride) {
-        data.pause();
-        data.cycle();
-      }
+      } 
     }
 
     static dataApiClickHandler(event) {
